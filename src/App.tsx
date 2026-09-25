@@ -1,17 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { campaign, categories, profile, projects, services, type Category, type Project } from './content'
 
 const Arrow = ({ diagonal = false }: { diagonal?: boolean }) => <span aria-hidden="true">{diagonal ? '↗' : '→'}</span>
 
 function ProjectCard({ project, onOpen, className = '' }: { project: Project; onOpen: (project: Project) => void; className?: string }) {
+  const imageRef = useRef<HTMLImageElement>(null)
+  const arrowRef = useRef<HTMLSpanElement>(null)
+
+  const animateHover = (entering: boolean, pointerType: string) => {
+    if (pointerType === 'touch' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    gsap.to(imageRef.current, { scale: entering ? 1.055 : 1, duration: entering ? 0.7 : 0.45, ease: entering ? 'power3.out' : 'power2.out', overwrite: 'auto' })
+    gsap.to(arrowRef.current, { rotation: entering ? 45 : 0, duration: 0.35, ease: 'power2.out', overwrite: 'auto' })
+  }
+
   return (
-    <button className={`project-card ${project.size ?? 'normal'} ${className}`} type="button" onClick={() => onOpen(project)} aria-label={`View ${project.title}, ${project.category} ${project.isConcept ? 'concept project' : 'project'}`}>
+    <button className={`project-card ${project.size ?? 'normal'} ${className}`} type="button" onClick={() => onOpen(project)} onPointerEnter={(event) => animateHover(true, event.pointerType)} onPointerLeave={(event) => animateHover(false, event.pointerType)} aria-label={`View ${project.title}, ${project.category} ${project.isConcept ? 'concept project' : 'project'}`}>
       <span className="project-image-wrap">
-        <img src={project.cover.src} alt={project.cover.alt} loading="lazy" decoding="async" />
+        <img ref={imageRef} src={project.cover.src} alt={project.cover.alt} loading="lazy" decoding="async" />
         <span className="image-shade" />
         {project.isConcept && <span className="concept-badge">Concept project</span>}
         {project.category === 'Videography' && !project.videoSrc && <span className="video-state">Video sample coming soon</span>}
-        <span className="card-open" aria-hidden="true"><Arrow diagonal /></span>
+        <span className="card-open" aria-hidden="true"><span ref={arrowRef}><Arrow diagonal /></span></span>
       </span>
       <span className="card-meta"><span>{project.category} <span className="meta-dot">·</span> {project.type}</span><span>{project.year}</span></span>
       <span className="card-title">{project.title}</span>
@@ -52,12 +63,85 @@ function ProjectDialog({ project, onClose }: { project: Project | null; onClose:
 }
 
 function App() {
+  const siteRef = useRef<HTMLDivElement>(null)
   const [activeFilter, setActiveFilter] = useState<Category | 'All'>('All')
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const galleryProjects = projects.filter((project) => activeFilter === 'All' || project.category === activeFilter)
   const featured = projects.filter((project) => project.featured)
   const closeMenu = () => setMenuOpen(false)
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger)
+    const root = siteRef.current
+    if (!root) return
+
+    const context = gsap.context(() => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        gsap.timeline({ defaults: { ease: 'power3.out' } })
+          .from('.hero-copy .eyebrow', { y: 14, autoAlpha: 0, duration: 0.65 })
+          .from('#hero-title', { y: 48, autoAlpha: 0, duration: 0.9 }, '-=0.38')
+          .from('.hero-intro, .hero-actions', { y: 18, autoAlpha: 0, duration: 0.65, stagger: 0.12 }, '-=0.42')
+          .from('.hero-art-main', { clipPath: 'inset(0 0 100% 0)', duration: 1.05, ease: 'power3.inOut' }, '-=0.72')
+
+        const revealTargets = gsap.utils.toArray<HTMLElement>(
+          '.section-heading, .campaign-top, .campaign-layout, .campaign-posts, .caption-block, .about-left, .about-right, .contact-section .eyebrow, .contact-section h2, .contact-section > p:not(.eyebrow), .site-footer',
+        )
+        revealTargets.forEach((element) => {
+          gsap.fromTo(element, { y: 26, autoAlpha: 0 }, {
+            y: 0,
+            autoAlpha: 1,
+            duration: 0.75,
+            ease: 'power3.out',
+            immediateRender: false,
+            scrollTrigger: { trigger: element, start: 'top 88%', once: true },
+          })
+        })
+
+        const staggerGroups = gsap.utils.toArray<HTMLElement>('.featured-grid, .post-grid, .services-grid')
+        staggerGroups.forEach((group) => {
+          const children = Array.from(group.children)
+          gsap.fromTo(children, { y: 24, autoAlpha: 0 }, {
+            y: 0,
+            autoAlpha: 1,
+            duration: 0.65,
+            stagger: 0.09,
+            ease: 'power3.out',
+            immediateRender: false,
+            scrollTrigger: { trigger: group, start: 'top 88%', once: true },
+          })
+        })
+
+        const gallery = root.querySelector('.gallery-grid')
+        if (gallery) {
+          gsap.fromTo(Array.from(gallery.children), { y: 22, autoAlpha: 0 }, {
+            y: 0,
+            autoAlpha: 1,
+            duration: 0.65,
+            stagger: 0.07,
+            ease: 'power3.out',
+            immediateRender: false,
+            scrollTrigger: { trigger: gallery, start: 'top 88%', once: true },
+          })
+        }
+    }, root)
+
+    return () => context.revert()
+  }, [])
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const cards = document.querySelectorAll('.gallery-grid .project-card')
+    const tween = gsap.fromTo(cards, { y: 16, autoAlpha: 0 }, {
+      y: 0,
+      autoAlpha: 1,
+      duration: 0.45,
+      stagger: 0.045,
+      ease: 'power2.out',
+      clearProps: 'opacity,visibility,transform',
+    })
+    return () => { tween.kill() }
+  }, [activeFilter])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -67,7 +151,7 @@ function App() {
   }, [menuOpen])
 
   return <>
-    <div className="site-shell">
+    <div className="site-shell" ref={siteRef}>
       <header className="site-header" id="top">
         <a className="wordmark" href="#top" onClick={closeMenu} aria-label="Karen Joyce Dicang, back to top">K<span>J.</span></a>
         <nav className={menuOpen ? 'main-nav open' : 'main-nav'} id="main-navigation" aria-label="Main navigation">
